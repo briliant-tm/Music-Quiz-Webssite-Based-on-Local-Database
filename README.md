@@ -59,7 +59,7 @@
 
 1.  **Clone & Setup**
     ```bash
-    git clone [https://github.com/username/LocalBeat.git](https://github.com/username/LocalBeat.git)
+    git clone [https://github.com/username/LocalBeat.git](https://github.com/briliant-tm/LocalBeat.git)
     cd LocalBeat
     pip install -r requirements.txt
     ```
@@ -127,7 +127,7 @@
 
 1.  **Clone & Setup**
     ```bash
-    git clone [https://github.com/username/LocalBeat.git](https://github.com/username/LocalBeat.git)
+    git clone [https://github.com/username/LocalBeat.git](https://github.com/briliant-tm/LocalBeat.git)
     cd LocalBeat
     pip install -r requirements.txt
     ```
