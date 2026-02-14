@@ -3,15 +3,14 @@ import random
 import json
 import time
 import hashlib
+import threading
+import webbrowser
 import numpy as np
 import librosa
 from flask import Flask, render_template, jsonify, send_file, request, session
-from mutagen.mp3 import MP3
-from mutagen.flac import FLAC
-from mutagen.wave import WAVE
 
 app = Flask(__name__)
-app.secret_key = 'localbeat_secret_key_vr1l'
+app.secret_key = 'localbeat_secret_key_vr1l_secure'
 
 # ==========================================
 # KONFIGURASI PATH DATABASE (EDIT DI SINI)
@@ -24,8 +23,9 @@ HISTORY_FILE = 'game_history.json'
 
 def load_json(filename):
     if os.path.exists(filename):
-        with open(filename, 'r') as f:
-            return json.load(f)
+        try:
+            with open(filename, 'r') as f: return json.load(f)
+        except: return {}
     return {}
 
 def save_json(filename, data):
@@ -34,9 +34,10 @@ def save_json(filename, data):
 
 def get_all_songs():
     songs = []
+    if not os.path.exists(MUSIC_FOLDER): return []
     for root, dirs, files in os.walk(MUSIC_FOLDER):
         for file in files:
-            if file.lower().endswith(('.mp3', '.flac', '.wav')):
+            if file.lower().endswith(('.mp3', '.flac', '.wav', '.ogg')):
                 songs.append(os.path.join(root, file))
     return songs
 
@@ -47,13 +48,11 @@ def get_smart_random_song():
     history = load_json(HISTORY_FILE)
     recent_list = history.get('recent', [])
 
-    # Retry mechanism to avoid repetition
-    for _ in range(5):
+    # Logic: 85% reroll if song was played recently (last 20 songs)
+    for _ in range(10):
         selected = random.choice(songs)
-        
         if selected in recent_list:
-            # 15% Chance to allow repeat, 85% chance to reroll
-            if random.random() < 0.15:
+            if random.random() < 0.15: # 15% chance to allow repeat
                 return selected
         else:
             return selected
@@ -63,28 +62,22 @@ def get_smart_random_song():
 def update_history(song_path):
     history = load_json(HISTORY_FILE)
     recent = history.get('recent', [])
-    
+    if song_path in recent:
+        recent.remove(song_path)
     recent.append(song_path)
-    # Keep memory of last 50 songs
-    if len(recent) > 50:
-        recent.pop(0)
-        
+    if len(recent) > 20: recent.pop(0)
     save_json(HISTORY_FILE, {'recent': recent})
 
 def analyze_drop(file_path, duration):
     cache = load_json(CACHE_FILE)
-    if file_path in cache:
-        return cache[file_path]
+    if file_path in cache: return cache[file_path]
 
     try:
-        # Scan middle of the song to save time
-        scan_duration = min(60, duration)
-        offset = (duration - scan_duration) / 2
-        
-        y, sr = librosa.load(file_path, sr=22050, offset=offset, duration=scan_duration, mono=True)
+        # Scan 45s from middle
+        scan_dur = min(45, duration)
+        offset = (duration - scan_dur) / 2
+        y, sr = librosa.load(file_path, sr=22050, offset=offset, duration=scan_dur, mono=True)
         rms = librosa.feature.rms(y=y)[0]
-        
-        # Find frame with max energy
         max_frame = np.argmax(rms)
         drop_time = offset + librosa.frames_to_time(max_frame, sr=sr)
         
@@ -96,11 +89,8 @@ def analyze_drop(file_path, duration):
 
 def get_audio_duration(path):
     try:
-        if path.endswith('.mp3'): audio = MP3(path)
-        elif path.endswith('.flac'): audio = FLAC(path)
-        elif path.endswith('.wav'): audio = WAVE(path)
-        else: return 0
-        return audio.info.length
+        # Fast duration check using Librosa (header read)
+        return librosa.get_duration(path=path)
     except:
         return 0
 
@@ -115,81 +105,74 @@ def quiz_page():
 @app.route('/api/bgm')
 def get_bgm():
     song = get_smart_random_song()
-    if not song: return jsonify({'error': 'No songs'})
+    if not song: return jsonify({'error': 'No songs found'})
     
-    duration = get_audio_duration(song)
-    start = random.uniform(0, max(0, duration - 60))
+    dur = get_audio_duration(song)
+    start = random.uniform(0, max(0, dur - 40))
     
     filename = os.path.basename(song)
     title = os.path.splitext(filename)[0]
-    
-    session['stream_path'] = song
+    session['bgm_path'] = song
     
     return jsonify({
         'title': title,
         'start': start,
-        'path_token': hashlib.md5(song.encode()).hexdigest() 
+        'token': hashlib.md5(str(time.time()).encode()).hexdigest()
     })
 
 @app.route('/api/question')
 def get_question():
-    target_song = get_smart_random_song()
-    update_history(target_song)
-    session['current_track'] = target_song
+    target = get_smart_random_song()
+    if not target: return jsonify({'error': 'Database Empty'})
     
-    duration = get_audio_duration(target_song)
+    update_history(target)
+    session['quiz_path'] = target
+    
+    dur = get_audio_duration(target)
     
     # 20-20-60 Logic
-    mode_roll = random.random()
-    start_time = 0
+    roll = random.random()
+    start = 0
     mode = "RANDOM"
 
-    if mode_roll <= 0.2:
-        start_time = 0
+    if roll <= 0.2:
+        start = 0
         mode = "INTRO"
-    elif mode_roll <= 0.4:
-        start_time = max(0, duration - 30)
+    elif roll <= 0.4:
+        start = max(0, dur - 30)
         mode = "OUTRO"
     else:
-        # Drop Analysis
-        start_time = analyze_drop(target_song, duration)
-        # Shift back 5 seconds to build up to the drop
-        start_time = max(0, start_time - 5)
+        drop = analyze_drop(target, dur)
+        start = max(0, drop - 5)
         mode = "CLIMAX"
 
-    session['start_time'] = start_time
-
-    # Generate Options
-    correct_name = os.path.splitext(os.path.basename(target_song))[0]
-    folder_clue = os.path.basename(os.path.dirname(target_song))
+    session['start_time'] = start
     
-    all_songs = get_all_songs()
-    distractors = []
-    while len(distractors) < 3:
-        s = random.choice(all_songs)
-        name = os.path.splitext(os.path.basename(s))[0]
-        if name != correct_name and name not in distractors:
-            distractors.append(name)
-            
-    options = distractors + [correct_name]
-    random.shuffle(options)
+    correct = os.path.splitext(os.path.basename(target))[0]
+    folder = os.path.basename(os.path.dirname(target))
+    
+    all_s = get_all_songs()
+    opts = [correct]
+    while len(opts) < 4:
+        s = random.choice(all_s)
+        n = os.path.splitext(os.path.basename(s))[0]
+        if n not in opts: opts.append(n)
+    
+    random.shuffle(opts)
     
     return jsonify({
-        'clue': folder_clue,
-        'options': options,
+        'clue': folder,
+        'options': opts,
         'mode': mode,
-        'start_time': start_time,
-        'correct_hash': hashlib.md5(correct_name.encode()).hexdigest()
+        'start_time': start,
+        'duration': dur
     })
 
 @app.route('/stream_audio')
 def stream_audio():
-    # Helper to stream active track securely
-    path = session.get('current_track')
-    # Or specific path for BGM
-    if request.args.get('token'):
-        path = session.get('stream_path')
-        
+    mode = request.args.get('type')
+    path = session.get('bgm_path') if mode == 'bgm' else session.get('quiz_path')
+    
     if path and os.path.exists(path):
         return send_file(path)
     return "Error", 404
@@ -197,14 +180,18 @@ def stream_audio():
 @app.route('/submit_answer', methods=['POST'])
 def check_answer():
     data = request.json
-    target_path = session.get('current_track')
-    correct_name = os.path.splitext(os.path.basename(target_path))[0]
-    
-    is_correct = data['answer'] == correct_name
-    return jsonify({
-        'correct': is_correct,
-        'correct_answer': correct_name
-    })
+    target = session.get('quiz_path')
+    correct = os.path.splitext(os.path.basename(target))[0]
+    is_correct = data.get('answer') == correct
+    return jsonify({'correct': is_correct, 'correct_answer': correct})
+
+@app.route('/shutdown', methods=['POST'])
+def shutdown():
+    os._exit(0)
+
+def open_browser():
+    webbrowser.open_new("http://127.0.0.1:5000")
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    threading.Timer(1.5, open_browser).start()
+    app.run(host='0.0.0.0', debug=False)

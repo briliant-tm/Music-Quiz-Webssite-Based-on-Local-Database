@@ -2,37 +2,59 @@ let audioCtx, analyser, source;
 const audioEl = document.getElementById('bgm-player');
 const canvas = document.getElementById('visualizer-canvas');
 const ctx = canvas.getContext('2d');
-const content = document.getElementById('landing-content');
-const vignette = document.getElementById('vignette-overlay');
+const notif = document.getElementById('jukebox-notif');
+let isInitialized = false;
 
-function startExperience() {
-    document.getElementById('start-overlay').style.display = 'none';
+function initExperience() {
+    if (isInitialized) return;
     
+    // Fade out overlay
+    document.getElementById('overlay-start').style.opacity = '0';
+    setTimeout(() => document.getElementById('overlay-start').style.display = 'none', 500);
+
+    // Audio Context Setup
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     analyser = audioCtx.createAnalyser();
+    
+    // Connect Audio Element
     source = audioCtx.createMediaElementSource(audioEl);
     source.connect(analyser);
     analyser.connect(audioCtx.destination);
     
-    analyser.fftSize = 256;
+    // High res FFT for smooth bars
+    analyser.fftSize = 4096; 
+    
     playNextBGM();
     renderFrame();
+    isInitialized = true;
 }
 
 function playNextBGM() {
     fetch('/api/bgm')
         .then(res => res.json())
         .then(data => {
-            audioEl.src = `/stream_audio?token=${data.path_token}`;
+            if(data.error) return;
+            
+            audioEl.src = `/stream_audio?type=bgm&token=${data.token}`;
             audioEl.currentTime = data.start;
-            audioEl.volume = 0.4;
+            audioEl.volume = 0; // Start silent for fade in
             audioEl.play();
             
+            // Fade In Volume
+            let vol = 0;
+            const fade = setInterval(() => {
+                if(vol < 0.5) { vol += 0.02; audioEl.volume = vol; }
+                else clearInterval(fade);
+            }, 50);
+
             // Show Notification
-            const notif = document.getElementById('jukebox-notif');
             document.getElementById('bgm-title').innerText = data.title;
             notif.classList.add('show');
-            setTimeout(() => notif.classList.remove('show'), 5000);
+            
+            // Hide after 4 seconds
+            setTimeout(() => {
+                notif.classList.remove('show');
+            }, 4000);
         });
 }
 
@@ -49,30 +71,40 @@ function renderFrame() {
     canvas.height = window.innerHeight;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    let bassEnergy = 0;
-    let totalEnergy = 0;
-    const barWidth = (canvas.width / bufferLength) * 2.5;
-    let x = 0;
-
-    for(let i = 0; i < bufferLength; i++) {
-        let barHeight = dataArray[i];
-        totalEnergy += barHeight;
-        if(i < 8) bassEnergy += barHeight; // Sub-bass range
-
-        ctx.fillStyle = `rgba(255,255,255,${barHeight/300})`;
-        ctx.fillRect(x, canvas.height - (barHeight * 1.5), barWidth, barHeight * 1.5);
-        x += barWidth + 2;
-    }
-
-    // PULSE EFFECT
-    const bassIntensity = bassEnergy / 2040; // Normalize
-    const scale = 1 + (bassIntensity * 0.08);
-    content.style.transform = `scale(${scale})`;
-
-    // DYNAMIC VIGNETTE
-    let opacity = 1 - (totalEnergy / bufferLength / 120);
-    if(opacity < 0) opacity = 0;
-    if(opacity > 0.95) opacity = 0.95;
+    // Draw only low-mid frequencies (first 200 bins) for cleaner look
+    const barsToDraw = 200; 
+    const barWidth = (canvas.width / barsToDraw);
     
-    vignette.style.background = `radial-gradient(circle, rgba(0,0,0,0) 20%, rgba(0,0,0,${opacity}) 90%)`;
+    for(let i = 0; i < barsToDraw; i++) {
+        // Boost height logic
+        let barHeight = dataArray[i] * 1.5; 
+        
+        // Gradient Color
+        const r = barHeight + (25 * (i/barsToDraw));
+        const g = 250 * (i/barsToDraw);
+        const b = 255;
+
+        ctx.fillStyle = `rgba(${r},${g},${b},0.6)`;
+        // Draw at bottom
+        ctx.fillRect(i * barWidth, canvas.height - (barHeight * 0.8), barWidth - 1, barHeight);
+    }
+}
+
+function startGame() {
+    const count = document.getElementById('q-count').value;
+    const curtain = document.getElementById('page-transition');
+    
+    // Visual Fade Out
+    curtain.style.opacity = '1';
+    
+    // Audio Fade Out
+    let vol = audioEl.volume;
+    const fade = setInterval(() => {
+        if(vol > 0.05) { vol -= 0.05; audioEl.volume = vol; }
+        else {
+            clearInterval(fade);
+            audioEl.pause();
+            window.location.href = `/quiz?count=${count}`;
+        }
+    }, 30);
 }

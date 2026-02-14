@@ -1,68 +1,80 @@
 const urlParams = new URLSearchParams(window.location.search);
 const TOTAL_QUESTIONS = parseInt(urlParams.get('count')) || 20;
-let currentQuestion = 0;
+let currentQ = 0;
 let score = 0;
-let replaysLeft = 3;
+let replays = 3;
 let isPlaying = false;
-let nextQuestionData = null;
+let nextData = null;
 
+// DOM Elements
 const audio = document.getElementById('game-audio');
-const overlay = document.getElementById('countdown-overlay');
-const countText = document.getElementById('countdown-text');
+const overlayCount = document.getElementById('overlay-countdown');
+const overlayOver = document.getElementById('overlay-gameover');
+const countTxt = document.getElementById('countdown-text');
+const replayBtn = document.getElementById('btn-replay');
+const progressFill = document.getElementById('progress-fill');
 
-document.getElementById('q-total').innerText = TOTAL_QUESTIONS;
+// Init Fade In Transition
+window.onload = () => {
+    document.getElementById('q-total').innerText = TOTAL_QUESTIONS;
+    setTimeout(() => {
+        document.getElementById('page-transition').style.opacity = '0';
+        setTimeout(() => document.getElementById('page-transition').style.display = 'none', 500);
+        loadNextLevel();
+    }, 500);
+};
 
-function initGame() {
-    loadNextQuestion();
-}
-
-function loadNextQuestion() {
-    if (currentQuestion >= TOTAL_QUESTIONS) {
-        alert(`GAME OVER! Final Score: ${score}`);
-        window.location.href = '/';
+function loadNextLevel() {
+    if (currentQ >= TOTAL_QUESTIONS) {
+        showGameOver();
         return;
     }
 
-    // Show Overlay
-    overlay.style.display = 'flex';
-    let count = 3;
-    countText.innerText = count;
+    // 1. Show Countdown Overlay
+    overlayCount.style.display = 'flex';
+    let timerVal = 3;
+    countTxt.innerText = timerVal;
+    document.getElementById('countdown-sub').innerText = "FETCHING AUDIO DATA...";
 
-    // Fetch in background
+    // 2. Fetch Data (Async)
     fetch('/api/question')
         .then(res => res.json())
         .then(data => {
-            nextQuestionData = data;
-            audio.src = '/stream_audio?t=' + Date.now(); // Prevent caching
+            nextData = data;
+            // Pre-load audio
+            audio.src = '/stream_audio?type=quiz&t=' + Date.now();
             audio.load();
         });
 
+    // 3. Countdown Logic
     const timer = setInterval(() => {
-        count--;
-        if (count > 0) {
-            countText.innerText = count;
+        timerVal--;
+        if(timerVal > 0) {
+            countTxt.innerText = timerVal;
+            if(timerVal === 1) document.getElementById('countdown-sub').innerText = "SYNCING WAVEFORM...";
         } else {
             clearInterval(timer);
-            overlay.style.display = 'none';
-            setupRound();
+            overlayCount.style.display = 'none';
+            startRound();
         }
     }, 1000);
 }
 
-function setupRound() {
-    currentQuestion++;
-    document.getElementById('q-current').innerText = currentQuestion;
-    replaysLeft = 3;
+function startRound() {
+    currentQ++;
+    document.getElementById('q-current').innerText = currentQ;
+    replays = 3;
     updateReplayBtn();
     
-    // Update UI
-    document.getElementById('clue-text').innerText = nextQuestionData.clue;
-    document.getElementById('mode-text').innerText = `MODE: ${nextQuestionData.mode}`;
+    // UI Update
+    document.getElementById('clue-text').innerText = nextData.clue;
+    document.getElementById('mode-badge').innerText = "MODE: " + nextData.mode;
     
-    // Setup Options
+    // Options
     const container = document.getElementById('options-container');
     container.innerHTML = '';
-    nextQuestionData.options.forEach(opt => {
+    
+    nextData.options.forEach(opt => {
         const btn = document.createElement('button');
         btn.className = 'option-btn';
         btn.innerText = opt;
@@ -70,84 +82,92 @@ function setupRound() {
         container.appendChild(btn);
     });
 
-    // Auto Play with Fade In
-    playAudio();
+    playAudioWithFade();
 }
 
-function playAudio() {
-    if (replaysLeft <= 0) return;
+function playAudioWithFade() {
+    if(replays <= 0) return;
     
-    audio.currentTime = nextQuestionData.start_time;
+    audio.currentTime = nextData.start_time;
     audio.volume = 0;
     audio.play();
     
     // Fade In
     let vol = 0;
     const fade = setInterval(() => {
-        if (vol < 1.0) { vol += 0.05; audio.volume = Math.min(1, vol); }
+        if(vol < 1.0) { vol += 0.1; audio.volume = Math.min(1, vol); }
         else clearInterval(fade);
     }, 50);
 
-    const btn = document.getElementById('btn-replay');
-    btn.disabled = true;
-    btn.innerText = "PLAYING...";
+    // Lock UI
     isPlaying = true;
-
-    // Visual Progress Bar (Fake)
-    const bar = document.getElementById('progress-fill');
-    bar.style.width = '0%';
-    setTimeout(() => { bar.style.width = '100%'; }, 100);
+    replayBtn.disabled = true;
+    replayBtn.innerText = "LISTENING...";
+    
+    // Visual Progress (Fake 15s bar for tension)
+    progressFill.style.transition = 'none';
+    progressFill.style.width = '0%';
+    setTimeout(() => {
+        progressFill.style.transition = 'width 10s linear';
+        progressFill.style.width = '100%';
+    }, 100);
 }
 
 audio.onended = () => {
-    replaysLeft--;
+    replays--;
     isPlaying = false;
     updateReplayBtn();
-    document.getElementById('progress-fill').style.width = '0%';
 };
 
 function updateReplayBtn() {
-    const btn = document.getElementById('btn-replay');
-    if (replaysLeft <= 0) {
-        btn.innerText = "NO REPLAYS LEFT";
-        btn.disabled = true;
+    if(replays <= 0) {
+        replayBtn.innerText = "SIGNAL LOST (0)";
+        replayBtn.disabled = true;
+        replayBtn.style.opacity = '0.5';
     } else {
-        btn.innerText = `PLAY (${replaysLeft} LEFT)`;
-        btn.disabled = false;
+        replayBtn.disabled = false;
+        replayBtn.innerText = `REPLAY SAMPLE (${replays})`;
+        replayBtn.style.opacity = '1';
     }
 }
 
-function submitAnswer(answer, btnElement) {
-    if(isPlaying) {
-        audio.pause();
-        audio.currentTime = 0;
-    }
+function triggerReplay() {
+    playAudioWithFade();
+}
+
+function submitAnswer(ans, btn) {
+    // Disable all
+    const allBtns = document.querySelectorAll('.option-btn');
+    allBtns.forEach(b => b.style.pointerEvents = 'none');
+    
+    // Stop Audio
+    audio.pause();
 
     fetch('/submit_answer', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ answer: answer })
+        body: JSON.stringify({answer: ans})
     })
     .then(res => res.json())
     .then(data => {
-        const allBtns = document.querySelectorAll('.option-btn');
-        allBtns.forEach(b => b.disabled = true);
-
-        if (data.correct) {
-            btnElement.classList.add('correct');
-            score += 10;
-            document.getElementById('score').innerText = score;
+        if(data.correct) {
+            btn.classList.add('correct');
+            score += 100; // Arcade scoring
+            document.getElementById('score-display').innerText = score;
         } else {
-            btnElement.classList.add('wrong');
-            // Highlight correct one
+            btn.classList.add('wrong');
+            // Highlight right answer
             allBtns.forEach(b => {
-                if (b.innerText === data.correct_answer) b.classList.add('correct');
+                if(b.innerText === data.correct_answer) b.classList.add('correct');
             });
         }
-
-        setTimeout(loadNextQuestion, 2000);
+        
+        // Next Level Delay
+        setTimeout(loadNextLevel, 2000);
     });
 }
 
-// Start immediately
-initGame();
+function showGameOver() {
+    document.getElementById('final-score').innerText = score;
+    overlayOver.style.display = 'flex';
+}

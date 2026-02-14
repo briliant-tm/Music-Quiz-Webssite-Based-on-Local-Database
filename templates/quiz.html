@@ -2,40 +2,56 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>LocalBeat - Quiz</title>
+    <title>LocalBeat // Arena</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div id="countdown-overlay">
-        <div id="countdown-text">3</div>
+    <div id="page-transition" style="opacity:1;"></div>
+
+    <div id="overlay-countdown">
+        <div class="countdown-number" id="countdown-text">3</div>
+        <div style="color:var(--secondary); letter-spacing:5px; margin-top:20px;" id="countdown-sub">LOADING ASSETS...</div>
     </div>
 
-    <div id="quiz-container">
-        <div style="position:absolute; top:20px; left:20px;">
-            SCORE: <span id="score">0</span> | Q: <span id="q-current">1</span>/<span id="q-total">20</span>
-        </div>
-
-        <div class="clue-box">
-            <h3 style="margin:0; color:#aaa;">FOLDER CLUE</h3>
-            <h1 style="margin:5px 0;" id="clue-text">LOADING...</h1>
-            <small id="mode-text">ANALYZING...</small>
-        </div>
-
-        <div class="player-controls">
-            <div class="progress-bar">
-                <div id="progress-fill" class="progress-fill"></div>
+    <div id="overlay-gameover">
+        <div class="result-card">
+            <h2 style="margin:0; letter-spacing:5px;">SESSION COMPLETE</h2>
+            <div class="score-big" id="final-score">0</div>
+            <div style="display:flex; gap:20px; justify-content:center;">
+                <button class="btn-main" onclick="location.href='/'">MAIN MENU</button>
+                <button class="btn-main" onclick="location.reload()">RETRY</button>
             </div>
-            <button id="btn-replay" class="btn-main" style="font-size:1rem; padding:10px 30px;" onclick="playAudio()">
-                PLAY (3 LEFT)
+        </div>
+    </div>
+
+    <div class="quiz-wrapper">
+        <div class="game-hud">
+            Q: <span id="q-current" class="highlight">1</span>/<span id="q-total">20</span>
+            <span style="margin:0 15px;">|</span>
+            SCORE: <span id="score-display">0</span>
+        </div>
+
+        <div class="clue-container">
+            <div class="clue-label">DATA SOURCE (FOLDER)</div>
+            <div class="clue-text" id="clue-text">...</div>
+            <div id="mode-badge" style="background:#333; display:inline-block; padding:5px 10px; font-size:0.8rem; border-radius:4px;">Wait...</div>
+        </div>
+
+        <div class="progress-container" style="width:60%;">
+            <div id="progress-fill" class="progress-fill"></div>
+        </div>
+
+        <div style="margin:20px 0;">
+            <button id="btn-replay" class="btn-main" style="padding:10px 30px; font-size:1rem;" onclick="triggerReplay()">
+                PLAY (3)
             </button>
         </div>
 
-        <div id="options-container" class="options-grid">
+        <div class="options-grid" id="options-container">
             </div>
     </div>
 
     <audio id="game-audio"></audio>
-
     <script src="{{ url_for('static', filename='js/quiz.js') }}"></script>
 </body>
 </html>
