@@ -16,7 +16,7 @@ app.secret_key = 'localbeat_vr1l_secure_key'
 # ==========================================
 # KONFIGURASI PATH DATABASE (EDIT DI SINI)
 # ==========================================
-MUSIC_FOLDER = r"E:\Kakak\Music\Music"
+MUSIC_FOLDER = r"E:Your/Music/Path/Here"
 # ==========================================
 
 CACHE_FILE = 'audio_cache.json'
