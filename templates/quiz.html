@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LocalBeat - Quiz</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div id="countdown-overlay">
+        <div id="countdown-text">3</div>
+    </div>
+
+    <div id="quiz-container">
+        <div style="position:absolute; top:20px; left:20px;">
+            SCORE: <span id="score">0</span> | Q: <span id="q-current">1</span>/<span id="q-total">20</span>
+        </div>
+
+        <div class="clue-box">
+            <h3 style="margin:0; color:#aaa;">FOLDER CLUE</h3>
+            <h1 style="margin:5px 0;" id="clue-text">LOADING...</h1>
+            <small id="mode-text">ANALYZING...</small>
+        </div>
+
+        <div class="player-controls">
+            <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            <button id="btn-replay" class="btn-main" style="font-size:1rem; padding:10px 30px;" onclick="playAudio()">
+                PLAY (3 LEFT)
+            </button>
+        </div>
+
+        <div id="options-container" class="options-grid">
+            </div>
+    </div>
+
+    <audio id="game-audio"></audio>
+
+    <script src="{{ url_for('static', filename='js/quiz.js') }}"></script>
+</body>
+</html>

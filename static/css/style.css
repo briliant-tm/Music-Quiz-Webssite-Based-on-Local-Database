@@ -1,0 +1,118 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: #0a0a0a;
+    color: white;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    overflow: hidden;
+}
+
+/* LANDING PAGE */
+#visualizer-canvas {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 1;
+}
+
+#vignette-overlay {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: radial-gradient(circle, rgba(0,0,0,0) 20%, rgba(0,0,0,1) 90%);
+    z-index: 2;
+    pointer-events: none;
+    transition: background 0.1s linear;
+}
+
+#landing-content {
+    position: relative;
+    z-index: 3;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    transition: transform 0.05s ease-out;
+}
+
+h1 { font-size: 4rem; letter-spacing: 10px; text-transform: uppercase; margin-bottom: 0; }
+.subtitle { color: #ff66aa; font-size: 1.2rem; letter-spacing: 5px; margin-bottom: 40px; }
+
+.btn-main {
+    padding: 15px 50px;
+    font-size: 1.5rem;
+    background: transparent;
+    border: 2px solid white;
+    color: white;
+    cursor: pointer;
+    transition: 0.3s;
+    text-transform: uppercase;
+}
+.btn-main:hover { background: white; color: black; box-shadow: 0 0 20px white; }
+
+/* QUIZ UI */
+#quiz-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    z-index: 10;
+    position: relative;
+}
+
+.clue-box {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 10px 30px;
+    border-radius: 20px;
+    margin-bottom: 20px;
+    border: 1px solid #ff66aa;
+    text-align: center;
+}
+
+.options-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    width: 80%;
+    max-width: 800px;
+}
+
+.option-btn {
+    background: rgba(0,0,0,0.6);
+    border: 1px solid #444;
+    padding: 20px;
+    color: white;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.option-btn:hover { background: #333; border-color: white; }
+.option-btn.correct { background: #28a745; border-color: #28a745; }
+.option-btn.wrong { background: #dc3545; border-color: #dc3545; }
+
+.player-controls { margin: 30px 0; text-align: center; }
+.progress-bar { width: 300px; height: 5px; background: #333; margin: 10px auto; position: relative; }
+.progress-fill { height: 100%; background: #ff66aa; width: 0%; transition: width 0.1s linear; }
+
+#countdown-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: #000;
+    display: none;
+    justify-content: center; align-items: center;
+    font-size: 10rem;
+    z-index: 999;
+}
+
+/* Jukebox Notification */
+.jukebox-notif {
+    position: fixed; top: 20px; right: -400px;
+    background: rgba(0,0,0,0.8);
+    border-right: 5px solid #ff66aa;
+    padding: 15px;
+    transition: right 0.5s;
+    z-index: 100;
+    display: flex; align-items: center; gap: 10px;
+}
+.jukebox-notif.show { right: 0; }

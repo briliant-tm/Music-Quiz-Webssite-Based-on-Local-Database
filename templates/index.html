@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LocalBeat - Landing</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div id="start-overlay" onclick="startExperience()" style="position:fixed; width:100%; height:100%; background:black; z-index:9999; display:flex; justify-content:center; align-items:center; cursor:pointer;">
+        <h1>CLICK TO START</h1>
+    </div>
+
+    <canvas id="visualizer-canvas"></canvas>
+    <div id="vignette-overlay"></div>
+
+    <div id="landing-content">
+        <h1>LOCALBEAT</h1>
+        <div class="subtitle">V-R1L DATABASE SYSTEM</div>
+        
+        <div class="setup-box">
+            <label>QUESTIONS: <span id="q-val">20</span></label>
+            <input type="range" min="10" max="50" value="20" step="10" oninput="document.getElementById('q-val').innerText=this.value" id="q-input">
+        </div>
+        <br>
+        <button class="btn-main" onclick="goToQuiz()">START GAME</button>
+    </div>
+
+    <div id="jukebox-notif" class="jukebox-notif">
+        <span>🎵</span>
+        <span id="bgm-title">Loading...</span>
+    </div>
+
+    <audio id="bgm-player" crossorigin="anonymous"></audio>
+    <script src="{{ url_for('static', filename='js/landing.js') }}"></script>
+    <script>
+        function goToQuiz() {
+            const count = document.getElementById('q-input').value;
+            // Fade out
+            const audio = document.getElementById('bgm-player');
+            let vol = audio.volume;
+            let fade = setInterval(() => {
+                if (vol > 0.05) { vol -= 0.05; audio.volume = vol; }
+                else { 
+                    clearInterval(fade); 
+                    window.location.href = `/quiz?count=${count}`; 
+                }
+            }, 50);
+        }
+    </script>
+</body>
+</html>
