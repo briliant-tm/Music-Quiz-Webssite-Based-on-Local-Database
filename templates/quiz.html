@@ -8,14 +8,17 @@
 <body>
     <div id="page-transition" style="opacity:1;"></div>
 
+    <div id="dynamic-bg"></div>
+    <canvas id="visualizer-canvas"></canvas>
+
     <div id="overlay-countdown">
         <div class="countdown-number" id="countdown-text">3</div>
-        <div style="color:var(--secondary); letter-spacing:5px; margin-top:20px;" id="countdown-sub">LOADING ASSETS...</div>
+        <div style="color:var(--secondary); letter-spacing:8px; margin-top:20px; font-weight:bold;" id="countdown-sub">LOADING ASSETS...</div>
     </div>
 
     <div id="overlay-gameover">
         <div class="result-card">
-            <h2 style="margin:0; letter-spacing:5px;">SESSION COMPLETE</h2>
+            <h2 style="margin:0; letter-spacing:5px; color:#fff;">SESSION COMPLETE</h2>
             <div class="score-big" id="final-score">0</div>
             <div style="display:flex; gap:20px; justify-content:center;">
                 <button class="btn-main" onclick="location.href='/'">MAIN MENU</button>
@@ -24,25 +27,25 @@
         </div>
     </div>
 
-    <div class="quiz-wrapper">
+    <div class="quiz-wrapper" id="content-wrapper">
         <div class="game-hud">
             Q: <span id="q-current" class="highlight">1</span>/<span id="q-total">20</span>
-            <span style="margin:0 15px;">|</span>
-            SCORE: <span id="score-display">0</span>
+            <span style="margin:0 15px; color:#555;">|</span>
+            SCORE: <span id="score-display" class="highlight">0</span>
         </div>
 
         <div class="clue-container">
-            <div class="clue-label">DATA SOURCE (FOLDER)</div>
+            <div class="clue-label">DATA SOURCE</div>
             <div class="clue-text" id="clue-text">...</div>
-            <div id="mode-badge" style="background:#333; display:inline-block; padding:5px 10px; font-size:0.8rem; border-radius:4px;">Wait...</div>
+            <div id="mode-badge" style="background:rgba(0,0,0,0.6); display:inline-block; padding:8px 15px; font-size:1rem; border-radius:4px; border:1px solid var(--border); letter-spacing:2px;">Wait...</div>
         </div>
 
-        <div class="progress-container" style="width:60%;">
+        <div class="progress-container">
             <div id="progress-fill" class="progress-fill"></div>
         </div>
 
-        <div style="margin:20px 0;">
-            <button id="btn-replay" class="btn-main" style="padding:10px 30px; font-size:1rem;" onclick="triggerReplay()">
+        <div style="margin:30px 0;">
+            <button id="btn-replay" class="btn-main" style="padding:12px 40px; font-size:1rem;" onclick="triggerReplay()">
                 PLAY (3)
             </button>
         </div>
@@ -51,7 +54,7 @@
             </div>
     </div>
 
-    <audio id="game-audio"></audio>
+    <audio id="game-audio" crossorigin="anonymous"></audio>
     <script src="{{ url_for('static', filename='js/quiz.js') }}"></script>
 </body>
 </html>

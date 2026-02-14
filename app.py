@@ -13,7 +13,7 @@ app = Flask(__name__)
 app.secret_key = 'localbeat_secret_key_vr1l_secure'
 
 # ==========================================
-# KONFIGURASI PATH DATABASE (EDIT DI SINI)
+# GANTI PATH DI BAWAH INI DENGAN LOKASI FOLDER MUSIKMU
 # ==========================================
 MUSIC_FOLDER = r"D:\PATH\KE\FOLDER\MUSIK\ANDA" 
 # ==========================================
@@ -48,15 +48,13 @@ def get_smart_random_song():
     history = load_json(HISTORY_FILE)
     recent_list = history.get('recent', [])
 
-    # Logic: 85% reroll if song was played recently (last 20 songs)
     for _ in range(10):
         selected = random.choice(songs)
         if selected in recent_list:
-            if random.random() < 0.15: # 15% chance to allow repeat
+            if random.random() < 0.15: 
                 return selected
         else:
             return selected
-            
     return selected 
 
 def update_history(song_path):
@@ -73,7 +71,6 @@ def analyze_drop(file_path, duration):
     if file_path in cache: return cache[file_path]
 
     try:
-        # Scan 45s from middle
         scan_dur = min(45, duration)
         offset = (duration - scan_dur) / 2
         y, sr = librosa.load(file_path, sr=22050, offset=offset, duration=scan_dur, mono=True)
@@ -89,7 +86,6 @@ def analyze_drop(file_path, duration):
 
 def get_audio_duration(path):
     try:
-        # Fast duration check using Librosa (header read)
         return librosa.get_duration(path=path)
     except:
         return 0
@@ -127,10 +123,8 @@ def get_question():
     
     update_history(target)
     session['quiz_path'] = target
-    
     dur = get_audio_duration(target)
     
-    # 20-20-60 Logic
     roll = random.random()
     start = 0
     mode = "RANDOM"
