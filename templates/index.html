@@ -2,57 +2,76 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>LocalBeat // Main Menu</title>
+    <title>LocalBeat // Lobby</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div id="page-transition"></div>
+    <div id="glitch-layer"></div>
 
     <div id="overlay-start" onclick="initExperience()">
-        <h1 style="color:white; font-family:'Orbitron'; letter-spacing:5px; text-shadow: 0 0 20px #fff;">CLICK TO INITIALIZE</h1>
+        <h1 style="font-family:'Orbitron'; letter-spacing:5px;">CLICK TO INITIALIZE</h1>
     </div>
 
     <div id="dynamic-bg"></div>
     <canvas id="visualizer-canvas"></canvas>
 
     <div id="jukebox-notif" class="jukebox-notif">
-        <div style="font-size:2rem;">🎵</div>
-        <div>
-            <div style="font-size:0.8rem; color:#aaa; text-transform:uppercase;">Now Playing</div>
-            <div id="bgm-title" style="white-space:nowrap;">Loading...</div>
-        </div>
+        <div style="font-size:0.8rem; color:#888;">NOW PLAYING</div>
+        <div id="bgm-title">Loading...</div>
     </div>
 
     <div class="landing-wrapper" id="content-wrapper">
         <div class="hero-title">LOCALBEAT</div>
-        <div class="hero-subtitle">SYSTEM VERSION 2.0</div>
+        <div class="hero-subtitle">ARCHIVE SYSTEM V3.0</div>
 
-        <div class="control-panel">
-            <div style="display:flex; flex-direction:column; align-items:center;">
-                <label style="font-size:0.8rem; color:#aaa; margin-bottom:5px;">QUESTIONS</label>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <span style="font-family:'Orbitron'; font-size:1.5rem;">10</span>
-                    <input type="range" id="q-count" min="10" max="50" step="10" value="20" oninput="document.getElementById('q-val').innerText=this.value">
-                    <span style="font-family:'Orbitron'; font-size:1.5rem; color:var(--secondary);" id="q-val">20</span>
-                </div>
+        <div class="mode-selector">
+            <div class="mode-btn active" onclick="selectMode('CLASSIC', this)">
+                <h3>CLASSIC</h3>
+                <p>MULTIPLE CHOICE</p>
             </div>
-            <div style="width:1px; height:50px; background:rgba(255,255,255,0.2); margin:0 20px;"></div>
-            <button class="btn-main" onclick="startGame()">START SESSION</button>
+            <div class="mode-btn" onclick="selectMode('TYPING', this)">
+                <h3>HARDCORE</h3>
+                <p>TYPING TEST</p>
+            </div>
         </div>
 
-        <div style="margin-top:30px;">
-            <button onclick="quitApp()" style="background:none; border:none; color:#666; cursor:pointer; font-family:'Rajdhani'; letter-spacing:3px; font-weight:bold; transition:0.3s;" onmouseover="this.style.color='#ff0055'" onmouseout="this.style.color='#666'">SHUTDOWN SYSTEM</button>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:30px;">
+            <label>LENGTH:</label>
+            <input type="range" id="q-count" min="10" max="50" step="10" value="10" oninput="document.getElementById('q-val').innerText=this.value">
+            <span id="q-val" style="font-family:'Orbitron'">10</span>
+        </div>
+
+        <button class="btn-main" onclick="startGame()">START SESSION</button>
+        
+        <div style="margin-top:20px;">
+            <button onclick="fetch('/shutdown', {method:'POST'}).then(()=>window.close())" style="background:none; border:none; color:#555; cursor:pointer;">QUIT</button>
         </div>
     </div>
 
     <audio id="bgm-player" crossorigin="anonymous"></audio>
-
     <script src="{{ url_for('static', filename='js/landing.js') }}"></script>
     <script>
-        function quitApp() {
-            if(confirm("Shutdown LocalBeat?")) {
-                fetch('/shutdown', {method:'POST'}).then(() => window.close());
-            }
+        let selectedMode = 'CLASSIC';
+        function selectMode(mode, el) {
+            selectedMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            el.classList.add('active');
+        }
+        function startGame() {
+            const count = document.getElementById('q-count').value;
+            // Glitch Transition
+            document.getElementById('glitch-layer').classList.add('glitch-active');
+            
+            // Fade out audio
+            const audio = document.getElementById('bgm-player');
+            let vol = audio.volume;
+            let fade = setInterval(() => {
+                if(vol > 0.05) { vol -= 0.05; audio.volume = vol; }
+                else {
+                    clearInterval(fade);
+                    window.location.href = `/quiz?count=${count}&mode=${selectedMode}`;
+                }
+            }, 30);
         }
     </script>
 </body>

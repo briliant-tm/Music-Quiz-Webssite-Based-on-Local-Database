@@ -1,11 +1,12 @@
 const urlParams = new URLSearchParams(window.location.search);
-const TOTAL_QUESTIONS = parseInt(urlParams.get('count')) || 20;
+const TOTAL_QUESTIONS = parseInt(urlParams.get('count')) || 10;
+const MODE = urlParams.get('mode') || 'CLASSIC';
+
 let currentQ = 0;
 let score = 0;
 let replays = 3;
 let isPlaying = false;
 let nextData = null;
-const CLIP_DURATION = 15.0; // Detik durasi kuis per soal
 
 // Elements
 const audio = document.getElementById('game-audio');
@@ -14,30 +15,25 @@ const overlayOver = document.getElementById('overlay-gameover');
 const countTxt = document.getElementById('countdown-text');
 const replayBtn = document.getElementById('btn-replay');
 const progressFill = document.getElementById('progress-fill');
-const bg = document.getElementById('dynamic-bg');
+const container = document.getElementById('game-interface-container');
 
-// Audio Context for Quiz Visualizer
-let audioCtx, analyser, source;
+// Audio Visualizer Context
+let audioCtx, analyser, source, animId;
 const canvas = document.getElementById('visualizer-canvas');
 const ctx = canvas.getContext('2d');
-let animFrameId;
 
 window.onload = () => {
     document.getElementById('q-total').innerText = TOTAL_QUESTIONS;
-    setTimeout(() => {
-        document.getElementById('page-transition').style.opacity = '0';
-        setTimeout(() => document.getElementById('page-transition').style.display = 'none', 500);
-        
-        // Init Web Audio API
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = audioCtx.createAnalyser();
-        source = audioCtx.createMediaElementSource(audio);
-        source.connect(analyser);
-        analyser.connect(audioCtx.destination);
-        analyser.fftSize = 128;
+    
+    // Setup Audio Ctx
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser();
+    source = audioCtx.createMediaElementSource(audio);
+    source.connect(analyser);
+    analyser.connect(audioCtx.destination);
+    analyser.fftSize = 256;
 
-        loadNextLevel();
-    }, 500);
+    loadNextLevel();
 };
 
 function loadNextLevel() {
@@ -47,72 +43,91 @@ function loadNextLevel() {
         return;
     }
 
+    // Glitch Transition Effect
+    const glitch = document.getElementById('glitch-layer');
+    glitch.classList.add('glitch-active');
+    setTimeout(() => glitch.classList.remove('glitch-active'), 300);
+
     overlayCount.style.display = 'flex';
-    let timerVal = 3;
-    countTxt.innerText = timerVal;
-    document.getElementById('countdown-sub').innerText = "FETCHING AUDIO DATA...";
-    progressFill.style.width = '0%';
+    let timer = 3;
+    countTxt.innerText = timer;
+    
+    fetch('/api/question').then(r=>r.json()).then(data => {
+        nextData = data;
+        audio.src = `/stream_audio?type=quiz&t=${Date.now()}`;
+        audio.load();
+    });
 
-    fetch('/api/question')
-        .then(res => res.json())
-        .then(data => {
-            nextData = data;
-            audio.src = '/stream_audio?type=quiz&t=' + Date.now();
-            audio.load();
-        });
-
-    const timer = setInterval(() => {
-        timerVal--;
-        if(timerVal > 0) {
-            countTxt.innerText = timerVal;
-            if(timerVal === 1) document.getElementById('countdown-sub').innerText = "SYNCING WAVEFORM...";
-        } else {
-            clearInterval(timer);
+    const interval = setInterval(() => {
+        timer--;
+        if(timer > 0) countTxt.innerText = timer;
+        else {
+            clearInterval(interval);
             overlayCount.style.display = 'none';
-            startRound();
+            setupRound();
         }
     }, 1000);
 }
 
-function startRound() {
+function setupRound() {
     currentQ++;
     document.getElementById('q-current').innerText = currentQ;
     replays = 3;
     updateReplayBtn();
     
     document.getElementById('clue-text').innerText = nextData.clue;
-    const modeBadge = document.getElementById('mode-badge');
-    modeBadge.innerText = "MODE: " + nextData.mode;
+    document.getElementById('mode-badge').innerText = nextData.mode;
     
-    if(nextData.mode === "CLIMAX") modeBadge.style.color = "#ff0055";
-    else if(nextData.mode === "INTRO") modeBadge.style.color = "#00e5ff";
-    else modeBadge.style.color = "#fff";
-    
-    const container = document.getElementById('options-container');
+    // RENDER INTERFACE BASED ON MODE
     container.innerHTML = '';
     
-    nextData.options.forEach(opt => {
-        const btn = document.createElement('button');
-        btn.className = 'option-btn';
-        btn.innerText = opt;
-        btn.onclick = () => fadeOutAndSubmit(opt, btn);
-        container.appendChild(btn);
-    });
+    if (MODE === 'CLASSIC') {
+        const grid = document.createElement('div');
+        grid.className = 'options-grid';
+        nextData.options.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.className = 'option-btn';
+            btn.innerText = opt;
+            btn.onclick = () => fadeOutAndSubmit(opt, btn);
+            grid.appendChild(btn);
+        });
+        container.appendChild(grid);
+    } 
+    else if (MODE === 'TYPING') {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'typing-container';
+        
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'typing-input';
+        
+        if (nextData.typing_type === 'FOLDER') {
+            input.placeholder = "Foreign File detected... Guess the FOLDER NAME";
+            input.style.borderColor = "#ff0055"; // Red hint
+        } else {
+            input.placeholder = "Type Title / Artist...";
+        }
+        
+        input.onkeydown = (e) => { if(e.key === 'Enter') fadeOutAndSubmit(input.value, input); };
+        
+        wrapper.appendChild(input);
+        container.appendChild(wrapper);
+        setTimeout(() => input.focus(), 100);
+    }
 
-    playAudioWithFade();
+    playAudio();
 }
 
-function playAudioWithFade() {
+function playAudio() {
     if(replays <= 0) return;
     if(audioCtx.state === 'suspended') audioCtx.resume();
     
     audio.currentTime = nextData.start_time;
-    audio.volume = 0;
-    audio.play();
+    audio.volume = 0; audio.play();
     
     let vol = 0;
-    const fade = setInterval(() => {
-        if(vol < 1.0) { vol += 0.1; audio.volume = Math.min(1, vol); }
+    const fade = setInterval(()=>{
+        if(vol < 1.0) { vol+=0.1; audio.volume = Math.min(1,vol); }
         else clearInterval(fade);
     }, 50);
 
@@ -120,123 +135,121 @@ function playAudioWithFade() {
     replayBtn.disabled = true;
     replayBtn.innerText = "LISTENING...";
     
-    // Realtime Progress Bar & Visualizer
-    cancelAnimationFrame(animFrameId);
+    cancelAnimationFrame(animId);
     updateGameLoop();
 }
 
 function updateGameLoop() {
     if(!isPlaying) return;
     
-    // 1. Progress Bar Logic
-    const elapsedTime = audio.currentTime - nextData.start_time;
-    let progress = (elapsedTime / CLIP_DURATION) * 100;
+    // Real-time Progress
+    const duration = 15; // Clip limit
+    const elapsed = audio.currentTime - nextData.start_time;
+    let pct = (elapsed / duration) * 100;
     
-    if(progress >= 100 || audio.ended) {
-        progress = 100;
-        audio.pause();
-        handleClipEnd();
+    if (pct >= 100 || audio.ended) {
+        pct = 100; audio.pause(); handleClipEnd();
     }
-    progressFill.style.width = `${progress}%`;
+    progressFill.style.width = `${pct}%`;
 
-    // 2. Visualizer Logic
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    analyser.getByteFrequencyData(dataArray);
+    // Visualizer Mirror
+    const buffer = analyser.frequencyBinCount;
+    const data = new Uint8Array(buffer);
+    analyser.getByteFrequencyData(data);
 
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    let totalEnergy = 0;
-    const barWidth = (canvas.width / bufferLength) * 2;
-    
-    for(let i = 0; i < bufferLength; i++) {
-        let barHeight = dataArray[i] * 1.5; 
-        totalEnergy += dataArray[i];
+    const barW = (canvas.width / buffer) * 4; // Wider bars
+    const centerY = canvas.height / 2;
+    let totalE = 0;
 
-        ctx.fillStyle = `rgba(0, 229, 255, 0.2)`;
-        ctx.fillRect(i * barWidth, canvas.height - barHeight, barWidth - 1, barHeight);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.shadowColor = '#000'; ctx.shadowBlur = 10;
+
+    for(let i=0; i<buffer; i++) {
+        let h = data[i] * 1.5;
+        totalE += data[i];
+        if (h > 0) {
+            const x = (canvas.width/2) + (i*barW/2) * (i%2===0 ? 1 : -1); 
+            ctx.fillRect(x, centerY - h/2, barW-2, h);
+        }
     }
 
-    // BG Pulse
-    const avgVol = totalEnergy / bufferLength;
-    let opacity = Math.min(0.6, avgVol / 100);
-    bg.style.background = `radial-gradient(circle at center, rgba(26,11,46,${opacity}) 0%, #000000 100%)`;
+    // Dynamic BG
+    const intensity = totalE / (buffer * 255);
+    document.getElementById('dynamic-bg').style.background = 
+        `radial-gradient(circle at center, rgba(30,30,30,${intensity}) 0%, #000 100%)`;
 
-    animFrameId = requestAnimationFrame(updateGameLoop);
+    animId = requestAnimationFrame(updateGameLoop);
 }
 
 function handleClipEnd() {
     replays--;
     isPlaying = false;
     updateReplayBtn();
-    
-    // Reset BG
-    bg.style.background = `radial-gradient(circle at center, #1a0b2e 0%, #000000 100%)`;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
 function updateReplayBtn() {
     if(replays <= 0) {
-        replayBtn.innerText = "SIGNAL LOST (0)";
-        replayBtn.disabled = true;
-        replayBtn.style.opacity = '0.5';
+        replayBtn.innerText = "SIGNAL LOST (0)"; replayBtn.disabled = true;
     } else {
-        replayBtn.disabled = false;
-        replayBtn.innerText = `REPLAY SAMPLE (${replays})`;
-        replayBtn.style.opacity = '1';
+        replayBtn.innerText = `REPLAY (${replays})`; replayBtn.disabled = false;
     }
 }
 
-function triggerReplay() {
-    playAudioWithFade();
-}
+function triggerReplay() { playAudio(); }
 
-// Crossfade out before checking answer
-function fadeOutAndSubmit(ans, btn) {
-    if(!isPlaying) {
-        submitAnswer(ans, btn);
-        return;
+function fadeOutAndSubmit(ans, uiElement) {
+    if (isPlaying) {
+        // Disable UI
+        if (MODE === 'CLASSIC') document.querySelectorAll('.option-btn').forEach(b=>b.disabled=true);
+        if (MODE === 'TYPING') uiElement.disabled = true;
+
+        let vol = audio.volume;
+        const fade = setInterval(() => {
+            if(vol > 0.05) { vol -= 0.1; audio.volume = vol; }
+            else {
+                clearInterval(fade);
+                audio.pause();
+                isPlaying = false;
+                submit(ans, uiElement);
+            }
+        }, 50);
+    } else {
+        submit(ans, uiElement);
     }
-    
-    const allBtns = document.querySelectorAll('.option-btn');
-    allBtns.forEach(b => b.style.pointerEvents = 'none');
-    
-    let vol = audio.volume;
-    const fade = setInterval(() => {
-        if(vol > 0.05) { vol -= 0.05; audio.volume = vol; }
-        else {
-            clearInterval(fade);
-            audio.pause();
-            isPlaying = false;
-            submitAnswer(ans, btn);
-        }
-    }, 40);
 }
 
-function submitAnswer(ans, btn) {
-    const allBtns = document.querySelectorAll('.option-btn');
-    allBtns.forEach(b => b.style.pointerEvents = 'none');
-
+function submit(ans, uiElement) {
     fetch('/submit_answer', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({answer: ans})
+        body: JSON.stringify({
+            answer: ans,
+            game_mode: MODE,
+            typing_type: nextData.typing_type
+        })
     })
-    .then(res => res.json())
-    .then(data => {
-        if(data.correct) {
-            btn.classList.add('correct');
-            score += 100; 
-            document.getElementById('score-display').innerText = score;
-        } else {
-            btn.classList.add('wrong');
-            allBtns.forEach(b => {
-                if(b.innerText === data.correct_answer) b.classList.add('correct');
-            });
+    .then(r=>r.json()).then(data => {
+        if(MODE === 'CLASSIC') {
+            if(data.correct) { uiElement.classList.add('correct'); score += 100; }
+            else { uiElement.classList.add('wrong'); }
+        } 
+        else if (MODE === 'TYPING') {
+            if(data.score > 0) {
+                uiElement.style.borderColor = "#00ff88";
+                uiElement.style.color = "#00ff88";
+                uiElement.value = `+${data.score} (${data.correct_answer})`;
+                score += data.score;
+            } else {
+                uiElement.style.borderColor = "#ff0055";
+                uiElement.style.color = "#ff0055";
+                uiElement.value = `WRONG: ${data.correct_answer}`;
+            }
         }
-        
-        setTimeout(loadNextLevel, 1500);
+        document.getElementById('score-display').innerText = score;
+        setTimeout(loadNextLevel, 2000);
     });
 }

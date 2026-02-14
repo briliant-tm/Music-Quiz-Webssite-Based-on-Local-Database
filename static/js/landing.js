@@ -4,35 +4,27 @@ const canvas = document.getElementById('visualizer-canvas');
 const ctx = canvas.getContext('2d');
 const notif = document.getElementById('jukebox-notif');
 const bg = document.getElementById('dynamic-bg');
-const content = document.getElementById('content-wrapper');
 
 let isInitialized = false;
 let particles = [];
 
 function initExperience() {
     if (isInitialized) return;
-    
     document.getElementById('overlay-start').style.opacity = '0';
     setTimeout(() => document.getElementById('overlay-start').style.display = 'none', 500);
 
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     analyser = audioCtx.createAnalyser();
-    
     source = audioCtx.createMediaElementSource(audioEl);
     source.connect(analyser);
     analyser.connect(audioCtx.destination);
-    
-    analyser.fftSize = 256; 
-    
+    analyser.fftSize = 512;
+
     // Init Particles
-    for(let i=0; i<50; i++) {
-        particles.push({
-            x: Math.random() * window.innerWidth,
-            y: Math.random() * window.innerHeight,
-            size: Math.random() * 2 + 1,
-            speedY: Math.random() * -1 - 0.5
-        });
-    }
+    for(let i=0; i<30; i++) particles.push({
+        x: Math.random()*window.innerWidth, y: Math.random()*window.innerHeight,
+        speed: Math.random()*0.5 + 0.1, size: Math.random()*2
+    });
 
     playNextBGM();
     renderFrame();
@@ -40,89 +32,60 @@ function initExperience() {
 }
 
 function playNextBGM() {
-    fetch('/api/bgm')
-        .then(res => res.json())
-        .then(data => {
-            if(data.error) return;
-            
-            audioEl.src = `/stream_audio?type=bgm&token=${data.token}`;
-            audioEl.currentTime = data.start;
-            audioEl.volume = 0; 
-            audioEl.play();
-            
-            let vol = 0;
-            const fade = setInterval(() => {
-                if(vol < 0.4) { vol += 0.02; audioEl.volume = vol; }
-                else clearInterval(fade);
-            }, 50);
+    fetch('/api/bgm').then(r=>r.json()).then(data => {
+        if(data.error) return;
+        audioEl.src = `/stream_audio?type=bgm&token=${data.token}`;
+        audioEl.currentTime = data.start;
+        audioEl.volume = 0; audioEl.play();
+        
+        let vol = 0;
+        let fade = setInterval(()=>{
+            if(vol < 0.5) { vol+=0.05; audioEl.volume = vol; }
+            else clearInterval(fade);
+        }, 100);
 
-            document.getElementById('bgm-title').innerText = data.title;
-            notif.classList.add('show');
-            setTimeout(() => notif.classList.remove('show'), 4000);
-        });
+        document.getElementById('bgm-title').innerText = data.title;
+        notif.classList.add('show');
+        setTimeout(()=>notif.classList.remove('show'), 4000);
+    });
 }
-
 audioEl.onended = playNextBGM;
 
 function renderFrame() {
     requestAnimationFrame(renderFrame);
-    
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    analyser.getByteFrequencyData(dataArray);
+    const buffer = analyser.frequencyBinCount;
+    const data = new Uint8Array(buffer);
+    analyser.getByteFrequencyData(data);
 
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    let bassEnergy = 0;
-    const barWidth = (canvas.width / bufferLength) * 2;
-    
-    // Draw Particles
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    // Particles
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
     particles.forEach(p => {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
-        p.y += p.speedY;
-        if(p.y < 0) p.y = canvas.height;
+        p.y -= p.speed; if(p.y < 0) p.y = canvas.height;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
     });
 
-    // Draw Visualizer & Calc Bass
-    for(let i = 0; i < bufferLength; i++) {
-        let barHeight = dataArray[i] * 1.2; 
-        if(i < 10) bassEnergy += dataArray[i];
+    // Mirror Visualizer (Center)
+    let totalEnergy = 0;
+    const barW = (canvas.width / buffer) * 2;
+    const centerY = canvas.height / 2;
 
-        const r = barHeight + (25 * (i/bufferLength));
-        const g = 200 * (i/bufferLength);
-        const b = 255;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.shadowBlur = 0;
 
-        ctx.fillStyle = `rgba(${r},${g},${b},0.4)`;
-        ctx.fillRect(i * barWidth, canvas.height - barHeight, barWidth - 1, barHeight);
+    for(let i=0; i<buffer; i++) {
+        let h = data[i] * 0.8;
+        totalEnergy += data[i];
+        if(h > 0) {
+            ctx.fillRect((i*barW) + (canvas.width/2 - (buffer*barW)/2), centerY - h/2, barW-1, h);
+        }
     }
 
-    // Pulse & Gradient Logic
-    const bassNormalized = bassEnergy / 2550;
-    const scale = 1 + (bassNormalized * 0.05);
-    content.style.transform = `scale(${scale})`;
-
-    let opacity = Math.min(0.8, bassNormalized * 2);
-    bg.style.background = `radial-gradient(circle at center, rgba(26,11,46,${opacity + 0.2}) 0%, #000000 100%)`;
-}
-
-function startGame() {
-    const count = document.getElementById('q-count').value;
-    const curtain = document.getElementById('page-transition');
-    
-    curtain.style.opacity = '1';
-    
-    let vol = audioEl.volume;
-    const fade = setInterval(() => {
-        if(vol > 0.05) { vol -= 0.05; audioEl.volume = vol; }
-        else {
-            clearInterval(fade);
-            audioEl.pause();
-            window.location.href = `/quiz?count=${count}`;
-        }
-    }, 40);
+    // Dynamic BG
+    const intensity = totalEnergy / (buffer * 255);
+    const hue = 240 + (intensity * 60); // Blue to Purple
+    bg.style.background = `radial-gradient(circle at center, hsla(${hue}, 60%, 10%, ${0.5 + intensity}) 0%, #000 100%)`;
 }
