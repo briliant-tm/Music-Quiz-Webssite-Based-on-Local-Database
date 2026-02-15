@@ -14,15 +14,12 @@ app = Flask(__name__)
 app.secret_key = 'localbeat_vr1l_secure_key'
 
 # ==========================================
-# KONFIGURASI PATH DATABASE (EDIT DI SINI)
-# ==========================================
-MUSIC_FOLDER = r"E:Your/Music/Path/Here"
+# [DI SINI PATH DATABASE MUSIK ANDA]
+MUSIC_FOLDER = r"D:\Music" 
 # ==========================================
 
 CACHE_FILE = 'audio_cache.json'
 HISTORY_FILE = 'game_history.json'
-
-# --- UTILITY FUNCTIONS ---
 
 def load_json(filename):
     if os.path.exists(filename):
@@ -36,23 +33,19 @@ def save_json(filename, data):
         json.dump(data, f)
 
 def get_clean_name(path):
-    # Hapus ekstensi (.mp3, .wav, dll)
     filename = os.path.basename(path)
     return os.path.splitext(filename)[0]
 
 def is_foreign(text):
-    # Cek karakter non-ASCII (Jepang, Korea, dll)
     return bool(re.search(r'[^\x00-\x7F]', text))
 
 def parse_artist_title(clean_name):
-    # Cek separator " - "
     if ' - ' in clean_name:
         parts = clean_name.split(' - ', 1)
-        return parts[0].strip(), parts[1].strip() # Artist, Title
-    return None, clean_name # No Artist, Only Title/Filename
+        return parts[0].strip(), parts[1].strip()
+    return None, clean_name
 
 def split_artists(artist_string):
-    # Pecah artis berdasarkan koma, &, feat, vs
     delimiters = r',|&|\sfeat\.?|\sft\.?|\svs\.?'
     raw_list = re.split(delimiters, artist_string, flags=re.IGNORECASE)
     return [x.strip() for x in raw_list if x.strip()]
@@ -72,7 +65,6 @@ def get_smart_random_song():
     history = load_json(HISTORY_FILE)
     recent = history.get('recent', [])
 
-    # Retry logic (15% chance repeat)
     for _ in range(10):
         selected = random.choice(songs)
         if selected in recent:
@@ -108,8 +100,6 @@ def get_duration(path):
     try: return librosa.get_duration(path=path)
     except: return 0
 
-# --- ROUTES ---
-
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -122,11 +112,9 @@ def quiz_page():
 def get_bgm():
     song = get_smart_random_song()
     if not song: return jsonify({'error': 'No songs'})
-    
     clean_name = get_clean_name(song)
     dur = get_duration(song)
     start = random.uniform(0, max(0, dur - 40))
-    
     session['bgm_path'] = song
     return jsonify({'title': clean_name, 'start': start, 'token': hashlib.md5(str(time.time()).encode()).hexdigest()})
 
@@ -134,12 +122,10 @@ def get_bgm():
 def get_question():
     target = get_smart_random_song()
     if not target: return jsonify({'error': 'Empty DB'})
-    
     update_history(target)
     session['quiz_path'] = target
     dur = get_duration(target)
     
-    # 20-20-60 Logic
     roll = random.random()
     start, mode = 0, "RANDOM"
     if roll <= 0.2: start, mode = 0, "INTRO"
@@ -149,11 +135,9 @@ def get_question():
         start, mode = max(0, drop - 5), "CLIMAX"
     
     session['start_time'] = start
-    
     clean_name = get_clean_name(target)
     folder_name = os.path.basename(os.path.dirname(target))
     
-    # Logic Pilihan Ganda (Classic)
     all_songs = get_all_songs()
     options = [clean_name]
     while len(options) < 4:
@@ -162,18 +146,16 @@ def get_question():
         if n not in options: options.append(n)
     random.shuffle(options)
     
-    # Logic Typing (Hardcore)
     is_foreign_file = is_foreign(clean_name)
     artist, title = parse_artist_title(clean_name)
     has_separator = artist is not None
     
-    # Determine Typing Type
-    typing_type = "NORMAL" # Default: Artist + Title
+    typing_type = "NORMAL"
     if is_foreign_file or not has_separator:
-        typing_type = "FOLDER" # Fallback to Folder Guess
+        typing_type = "FOLDER"
     
     return jsonify({
-        'clue': folder_name,
+        'clue_content': folder_name, 
         'options': options,
         'mode': mode,
         'start_time': start,
@@ -191,7 +173,7 @@ def stream_audio():
 @app.route('/submit_answer', methods=['POST'])
 def check_answer():
     data = request.json
-    game_mode = data.get('game_mode') # 'CLASSIC' or 'TYPING'
+    game_mode = data.get('game_mode')
     user_answer = data.get('answer', '').strip().lower()
     
     target_path = session.get('quiz_path')
@@ -207,37 +189,27 @@ def check_answer():
             
     elif game_mode == 'TYPING':
         typing_type = data.get('typing_type')
-        
         if typing_type == 'FOLDER':
-            # Fuzzy match folder name
             if user_answer in folder_name.lower() and len(user_answer) > 2:
                 response['correct'] = True
                 response['score'] = 100
-                response['correct_answer'] = folder_name # Show folder as answer
+                response['correct_answer'] = folder_name
             else:
                  response['correct_answer'] = folder_name
-
-        else: # NORMAL (Artist + Title)
+        else:
             artist, title = parse_artist_title(clean_name)
             score = 0
-            
-            # 1. Check Title (50 Pts) - Fuzzy contains
             if user_answer in title.lower() or title.lower() in user_answer:
-                # Basic check, user must type significant part
                 if len(user_answer) > 3: score += 50
             
-            # 2. Check Artist (50 Pts - Split)
             target_artists = split_artists(artist)
             points_per_artist = 50 / len(target_artists) if target_artists else 0
-            
             artist_score = 0
             for t_art in target_artists:
                 if t_art.lower() in user_answer:
                     artist_score += points_per_artist
-            
             score += artist_score
-            
-            response['score'] = int(score) # Round down
+            response['score'] = int(score)
             response['correct'] = score > 0
             response['correct_answer'] = f"{artist} - {title}"
 
